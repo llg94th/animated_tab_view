@@ -61,8 +61,14 @@ class AnimatedReorderableStack extends StatefulWidget {
   const AnimatedReorderableStack({
     super.key,
     required this.controller,
-    this.clipBehavior = Clip.none,
+    this.clipBehavior = Clip.hardEdge,
     this.children = const <Widget>[],
+    this.childHeight = 300.0,
+    this.childWidth = 500.0,
+    this.minTabWidth = 150.0,
+    this.tabOverlapWidth = 10.0,
+    this.tabHeightSpacing = 4.0,
+    this.tabHeight = 30.0,
   });
 
   /// The controller that manages the ordering and animations.
@@ -73,6 +79,27 @@ class AnimatedReorderableStack extends StatefulWidget {
 
   /// The list of children widgets.
   final List<Widget> children;
+
+  /// Height of each child container
+  final double childHeight;
+
+  /// Width of each child container
+  final double childWidth;
+
+  /// Minimum width of tabs
+  final double minTabWidth;
+
+  /// Overlap width between tabs
+  final double tabOverlapWidth;
+
+  /// Height spacing between tabs
+  final double tabHeightSpacing;
+
+  /// Height of tab headers
+  final double tabHeight;
+
+  /// Calculated exposed width of tabs
+  double get tabExposedWidth => minTabWidth - tabOverlapWidth;
 
   @override
   State<AnimatedReorderableStack> createState() =>
@@ -90,14 +117,6 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
   // Store previous and current tab widths for animation
   Map<int, double> _previousTabWidths = {};
   final Map<int, double> _currentTabWidths = {};
-
-  static const childHeight = 300.0;
-  static const childWidth = 500.0;
-  static const minTabWidth = 150.0;
-  static const tabOverlapWidth = 10.0;
-  static const kTabHeightSpacing = 4.0;
-  static const tabHeight = 30.0;
-  static const tabExposedWidth = minTabWidth - tabOverlapWidth;
 
   @override
   void initState() {
@@ -122,7 +141,8 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
   void _initializeTabWidths() {
     for (int i = 0; i < widget.controller.length; i++) {
       final positionInOrdering = widget.controller.indices.indexOf(i);
-      final tabWidth = minTabWidth + (positionInOrdering * tabExposedWidth);
+      final tabWidth =
+          widget.minTabWidth + (positionInOrdering * widget.tabExposedWidth);
 
       _currentTabWidths[i] = tabWidth;
       _previousTabWidths[i] = tabWidth;
@@ -131,7 +151,7 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
 
   void _onControllerChanged() {
     // Store previous values for animation
-    if(!_isJustSwiped) _previousTabWidths = Map.from(_currentTabWidths);
+    if (!_isJustSwiped) _previousTabWidths = Map.from(_currentTabWidths);
     _isJustSwiped = false;
     // Calculate new values
     _updateAnimatedProperties();
@@ -146,7 +166,8 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
       final positionInOrdering = widget.controller.indices.indexOf(i);
 
       // Calculate tab width (without drag reduction - that's applied in build)
-      final tabWidth = minTabWidth + (positionInOrdering * tabExposedWidth);
+      final tabWidth =
+          widget.minTabWidth + (positionInOrdering * widget.tabExposedWidth);
       _currentTabWidths[i] = tabWidth;
     }
   }
@@ -187,11 +208,14 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
             final isDraggingLayer = _draggingIndex == index;
             final isDragging = _draggingIndex != null;
             final isTop = index == widget.controller.topIndex;
-            final reducedTabWidth = max(min(dragOffset.dx, 0.0), -minTabWidth);
+            final reducedTabWidth =
+                max(min(dragOffset.dx, 0.0), -widget.minTabWidth);
+            final zRatio = (-reducedTabWidth / widget.minTabWidth);
 
             // Calculate animated tab width
-            final previousWidth = _previousTabWidths[index] ?? minTabWidth;
-            final currentWidth = _currentTabWidths[index] ?? minTabWidth;
+            final previousWidth =
+                _previousTabWidths[index] ?? widget.minTabWidth;
+            final currentWidth = _currentTabWidths[index] ?? widget.minTabWidth;
 
             final baseAnimatedWidth = isDraggingLayer
                 ? currentWidth // Use current width during drag
@@ -202,17 +226,19 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
 
             // Apply drag reduction only when actually dragging
             final animatedTabWidth = isDragging
-                ? max(baseAnimatedWidth + reducedTabWidth, minTabWidth)
+                ? max(baseAnimatedWidth + reducedTabWidth, widget.minTabWidth)
                 : baseAnimatedWidth;
 
-            final position = isDraggingLayer ? Offset(min(0.0, dragOffset.dx), 0.0) : Offset.zero;
-            final opacity = isTop && isDraggingLayer
-                ? (max(minTabWidth + dragOffset.dx, 0.0) / minTabWidth)
-                    .clamp(0.1, 0.9)
-                : 1.0;
+            final position = isDraggingLayer
+                ? Offset(min(0.0, dragOffset.dx), 0.0)
+                : Offset.zero;
+            final opacity = isTop && isDraggingLayer ? 1 - zRatio : 1.0;
 
-            final reducedTitleHeight = kTabHeightSpacing * positionInOrdering;
-            final newTitleHeight = tabHeight - reducedTitleHeight;
+            final reducedTitleHeight = isDragging
+                ? widget.tabHeightSpacing * positionInOrdering -
+                    zRatio * widget.tabHeightSpacing
+                : widget.tabHeightSpacing * positionInOrdering;
+            final newTitleHeight = widget.tabHeight - reducedTitleHeight;
 
             return Positioned(
               left: position.dx,
@@ -239,8 +265,8 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
                       Colors.primaries[index % Colors.primaries.length],
                       Colors.white
                     ],
-                    width: childWidth,
-                    height: childHeight - reducedTitleHeight,
+                    width: widget.childWidth,
+                    height: widget.childHeight - reducedTitleHeight,
                     titleWidth: animatedTabWidth,
                     titleHeight: newTitleHeight,
                     child: Column(
@@ -250,10 +276,10 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
                           alignment: Alignment.centerRight,
                           width: animatedTabWidth,
                           child: SizedBox(
-                            width: minTabWidth,
+                            width: widget.minTabWidth,
                             height: newTitleHeight,
                             child: Transform.scale(
-                              scale: newTitleHeight / tabHeight,
+                              scale: newTitleHeight / widget.tabHeight,
                               child: Text(
                                 'Tab Tab ${index + 1}',
                                 textAlign: TextAlign.center,
@@ -298,7 +324,9 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
         } else {
           _previousTabWidths = Map.from(_currentTabWidths);
           for (int i = 0; i < widget.controller.length; i++) {
-            _previousTabWidths[i] = max(_previousTabWidths[i]! - minTabWidth, minTabWidth);
+            _previousTabWidths[i] = max(
+                _previousTabWidths[i]! - widget.minTabWidth,
+                widget.minTabWidth);
           }
           _isJustSwiped = true;
           // Swipe left - go to next
@@ -319,7 +347,6 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
 
   @override
   Widget build(BuildContext context) {
-    log('building stack with indices: ${widget.controller.indices.toString()}');
     return ValueListenableBuilder(
       valueListenable: widget.controller,
       builder: (context, value, child) {
