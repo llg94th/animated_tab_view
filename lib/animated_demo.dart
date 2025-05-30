@@ -197,6 +197,7 @@ class _AnimatedReorderableStackDemoState
               ),
               child: AnimatedReorderableStack(
                 controller: _controller,
+                childWidth: MediaQuery.of(context).size.width - 32,
                 children: const [
                   // Child 0 - Red rabbit container
                   Center(
