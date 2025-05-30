@@ -11,10 +11,19 @@ class AnimatedReorderableController extends ValueNotifier<int> {
     required this.length,
     int topIndex = 0,
     this.onReorder,
+    this.animationDuration = const Duration(milliseconds: 300),
+    this.animationCurve = Curves.easeOutCubic,
   })  : indices = List.generate(length, (index) => index),
         super(topIndex);
 
   int get topIndex => value;
+
+  /// Duration for all animations in the stack
+  final Duration animationDuration;
+
+  /// Curve for all animations in the stack
+  final Curve animationCurve;
+
   void setTopIndex(int index) {
     // Reorder indices so target index is first, then continue in circular order
     indices.clear();
@@ -52,20 +61,12 @@ class AnimatedReorderableStack extends StatefulWidget {
   const AnimatedReorderableStack({
     super.key,
     required this.controller,
-    this.alignment = AlignmentDirectional.topStart,
-    this.fit = StackFit.loose,
-    this.clipBehavior = Clip.hardEdge,
+    this.clipBehavior = Clip.none,
     this.children = const <Widget>[],
   });
 
   /// The controller that manages the ordering and animations.
   final AnimatedReorderableController controller;
-
-  /// How to align the non-positioned children in the stack.
-  final AlignmentGeometry alignment;
-
-  /// How to size the non-positioned children in the stack.
-  final StackFit fit;
 
   /// The content will be clipped (or not) according to this option.
   final Clip clipBehavior;
@@ -81,109 +82,200 @@ class AnimatedReorderableStack extends StatefulWidget {
 class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
     with TickerProviderStateMixin {
   int? _draggingIndex;
-  Offset _dragOffset = Offset.zero;
+  late ValueNotifier<Offset> _dragOffset;
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+
+  // Store previous and current tab widths for animation
+  Map<int, double> _previousTabWidths = {};
+  final Map<int, double> _currentTabWidths = {};
+
+  static const childHeight = 300.0;
+  static const childWidth = 500.0;
+  static const minTabWidth = 150.0;
+  static const tabOverlapWidth = 10.0;
+  static const kTabHeightSpacing = 4.0;
+  static const tabHeight = 30.0;
+  static const tabExposedWidth = minTabWidth - tabOverlapWidth;
 
   @override
   void initState() {
     super.initState();
+    _dragOffset = ValueNotifier(Offset.zero);
+    _animationController = AnimationController(
+      duration: widget.controller.animationDuration,
+      vsync: this,
+    );
+
+    _animation = CurvedAnimation(
+      parent: _animationController,
+      curve: widget.controller.animationCurve,
+    );
+
+    widget.controller.addListener(_onControllerChanged);
+
+    // Initialize tab widths
+    _initializeTabWidths();
+  }
+
+  void _initializeTabWidths() {
+    for (int i = 0; i < widget.controller.length; i++) {
+      final positionInOrdering = widget.controller.indices.indexOf(i);
+      final tabWidth = minTabWidth + (positionInOrdering * tabExposedWidth);
+
+      _currentTabWidths[i] = tabWidth;
+      _previousTabWidths[i] = tabWidth;
+    }
+  }
+
+  void _onControllerChanged() {
+    // Store previous values for animation
+    _previousTabWidths = Map.from(_currentTabWidths);
+
+    // Calculate new values
+    _updateAnimatedProperties();
+
+    // Start animation
+    _animationController.reset();
+    _animationController.forward();
+  }
+
+  void _updateAnimatedProperties() {
+    for (int i = 0; i < widget.controller.length; i++) {
+      final positionInOrdering = widget.controller.indices.indexOf(i);
+
+      // Calculate tab width (without drag reduction - that's applied in build)
+      final tabWidth = minTabWidth + (positionInOrdering * tabExposedWidth);
+      _currentTabWidths[i] = tabWidth;
+    }
   }
 
   @override
   void didUpdateWidget(AnimatedReorderableStack oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
+
+      _animationController.duration = widget.controller.animationDuration;
+      _animation = CurvedAnimation(
+        parent: _animationController,
+        curve: widget.controller.animationCurve,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
+    _animationController.dispose();
+    _dragOffset.dispose();
+    super.dispose();
   }
 
   Widget _buildDraggableChild({
     required int index,
     required int positionInOrdering,
   }) {
-    const childHeight = 300.0;
-    const minTabWidth = 150.0;
-    const overlapSpacing = 20.0;
-    const kTabHeightSpacing = 4.0;
-    const baseExtendedWidth = minTabWidth - overlapSpacing;
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return ValueListenableBuilder<Offset>(
+          valueListenable: _dragOffset,
+          builder: (context, dragOffset, child) {
+            final isDraggingLayer = _draggingIndex == index;
+            final isDragging = _draggingIndex != null;
+            final isTop = index == widget.controller.topIndex;
+            // final reducedTabWidth = max(min(dragOffset.dx, 0.0), -minTabWidth);
 
-    const basePosition = Offset.zero;
-    final zRatio =
-        1 - min(1.0, max(_dragOffset.dx + minTabWidth, 0.0) / minTabWidth);
-    final reducedWidth = zRatio * baseExtendedWidth;
-    final increaseHeight = zRatio * kTabHeightSpacing;
+            // Calculate animated tab width
+            final previousWidth = _previousTabWidths[index] ?? minTabWidth;
+            final currentWidth = _currentTabWidths[index] ?? minTabWidth;
 
-    final isDragging = _draggingIndex == index;
-    final tabWidth =
-        minTabWidth + (positionInOrdering * baseExtendedWidth) - reducedWidth;
-    final scaledHeight =
-        childHeight - (positionInOrdering * kTabHeightSpacing) + increaseHeight;
-    final scale = isDragging ? 1.0 : scaledHeight / childHeight;
-    final finalPosition =
-        isDragging ? basePosition + Offset(_dragOffset.dx, 0) : basePosition;
-    final isTop = index == widget.controller.topIndex;
-    final bottomAlignOffset = childHeight - scaledHeight;
-    final opacity = isTop && isDragging
-        ? (max(minTabWidth - _dragOffset.dx.abs(), 0.0) / minTabWidth).clamp(0.3, 1.0)
-        : 1.0;
-    return Positioned(
-      left: finalPosition.dx,
-      top: finalPosition.dy + bottomAlignOffset / 2,
-      child: Opacity(
-        opacity: opacity,
-        child: Transform.scale(
-          scale: scale,
-          child: GestureDetector(
-            behavior: HitTestBehavior.deferToChild,
-            onTap: isTop ? null : () => _handleTap(index),
-            onPanStart: isTop
-                ? (details) {
-                    setState(() {
-                      _draggingIndex = index;
-                      _dragOffset = Offset.zero;
-                    });
-                  }
-                : null,
-            onPanUpdate: isTop
-                ? (details) => setState(() => _dragOffset += details.delta)
-                : null,
-            onPanEnd:
-                isTop ? (details) => _handleDragEnd(index, details) : null,
-            child: TabContainer(
-              gradient: [
-                Colors.primaries[index % Colors.primaries.length],
-                Colors.white
-              ],
-              width: 500,
-              height: childHeight,
-              titleWidth: tabWidth,
-              titleHeight: 30,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    alignment: Alignment.centerRight,
-                    width: tabWidth,
-                    child: SizedBox(
-                      width: minTabWidth,
-                      height: 30,
-                      child: Text(
-                        'Tab Tab ${index + 1}',
-                        textAlign: TextAlign.center,
-                      ),
+            final baseAnimatedWidth = isDraggingLayer
+                ? currentWidth // Use current width during drag
+                : Tween<double>(
+                    begin: previousWidth,
+                    end: currentWidth,
+                  ).animate(_animation).value;
+
+            // Apply drag reduction only when actually dragging
+            final animatedTabWidth = isDragging
+                ? baseAnimatedWidth
+                : baseAnimatedWidth;
+
+            final position = isDraggingLayer ? dragOffset : Offset.zero;
+            final opacity = isTop && isDraggingLayer
+                ? (max(minTabWidth - dragOffset.dx.abs(), 0.0) / minTabWidth)
+                    .clamp(0.1, 0.9)
+                : 1.0;
+
+            final reducedTitleHeight = kTabHeightSpacing * positionInOrdering;
+            final newTitleHeight = tabHeight - reducedTitleHeight;
+
+            return Positioned(
+              left: position.dx,
+              top: reducedTitleHeight,
+              child: Opacity(
+                opacity: opacity,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.deferToChild,
+                  onTap: isTop || isDragging ? null : () => _handleTap(index),
+                  onPanStart: isTop
+                      ? (details) {
+                          _draggingIndex = index;
+                          _dragOffset.value = Offset.zero;
+                        }
+                      : null,
+                  onPanUpdate: isTop
+                      ? (details) => _dragOffset.value += details.delta
+                      : null,
+                  onPanEnd: isTop
+                      ? (details) => _handleDragEnd(index, details)
+                      : null,
+                  child: TabContainer(
+                    gradient: [
+                      Colors.primaries[index % Colors.primaries.length],
+                      Colors.white
+                    ],
+                    width: childWidth,
+                    height: childHeight - reducedTitleHeight,
+                    titleWidth: animatedTabWidth,
+                    titleHeight: newTitleHeight,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          alignment: Alignment.centerRight,
+                          width: animatedTabWidth,
+                          child: SizedBox(
+                            width: minTabWidth,
+                            height: newTitleHeight,
+                            child: Transform.scale(
+                              scale: newTitleHeight / tabHeight,
+                              child: Text(
+                                'Tab Tab ${index + 1}',
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ),
+                        widget.children[index],
+                      ],
                     ),
                   ),
-                  widget.children[index],
-                ],
+                ),
               ),
-            ),
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
   void _handleTap(int tappedIndex) {
     if (tappedIndex == widget.controller.topIndex) {
       // Tapped on current top card - cycle to next
-      widget.controller.next();
-      widget.controller.onReorder?.call(widget.controller.topIndex);
     } else {
       // Tapped on other card - make it the top card
       widget.controller.setTopIndex(tappedIndex);
@@ -192,17 +284,14 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
   }
 
   void _handleDragEnd(int draggedIndex, DragEndDetails details) {
-    final dragDistance = _dragOffset.dx.abs();
+    final dragDistance = _dragOffset.value.dx.abs();
     final velocity = details.velocity.pixelsPerSecond;
-    final isSwipe = dragDistance > 300 ||
-        velocity.distance > 500; // Drag distance OR velocity threshold
+    final isSwipe = dragDistance > 30 || velocity.distance > 500;
 
     if (draggedIndex == widget.controller.topIndex) {
       // Current child swiped - move to next or previous based on swipe direction
       if (isSwipe) {
-        log('isSwipe: $isSwipe');
-        log('dragOffset: ${_dragOffset.dx}');
-        if (_dragOffset.dx > 0) {
+        if (_dragOffset.value.dx > 0) {
           // Swipe right - go to previous
           widget.controller.previous();
         } else {
@@ -218,7 +307,7 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
     }
     setState(() {
       _draggingIndex = null;
-      _dragOffset = Offset.zero;
+      _dragOffset.value = Offset.zero;
     });
   }
 
@@ -226,39 +315,31 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
   Widget build(BuildContext context) {
     log('building stack with indices: ${widget.controller.indices.toString()}');
     return ValueListenableBuilder(
-        valueListenable: widget.controller,
-        builder: (context, value, child) {
-          return Stack(
-            alignment: widget.alignment,
-            fit: widget.fit,
-            clipBehavior: widget.clipBehavior,
-            children: [
-              ...widget.controller.indices
-                  .map((value) {
-                    final positionInOrdering =
-                        widget.controller.indices.indexOf(value);
-                    return _buildDraggableChild(
-                        index: value, positionInOrdering: positionInOrdering);
-                  })
-                  .toList()
-                  .reversed,
-              if (_draggingIndex != null)
-                _buildDraggableChild(
-                    index: _draggingIndex!,
-                    positionInOrdering:
-                        widget.controller.indices.indexOf(_draggingIndex ?? 0)),
-            ],
-          );
-        });
+      valueListenable: widget.controller,
+      builder: (context, value, child) {
+        return AnimatedBuilder(
+          animation: _animation,
+          builder: (context, child) {
+            return Stack(
+                alignment: AlignmentDirectional.topEnd,
+                fit: StackFit.loose,
+                clipBehavior: widget.clipBehavior,
+                children: widget.controller.indices.reversed.map((value) {
+                  final positionInOrdering =
+                      widget.controller.indices.indexOf(value);
+                  return _buildDraggableChild(
+                      index: value, positionInOrdering: positionInOrdering);
+                }).toList());
+          },
+        );
+      },
+    );
   }
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(IntProperty('topIndex', widget.controller.topIndex));
-    properties.add(
-        DiagnosticsProperty<AlignmentGeometry>('alignment', widget.alignment));
-    properties.add(EnumProperty<StackFit>('fit', widget.fit));
     properties.add(EnumProperty<Clip>('clipBehavior', widget.clipBehavior));
   }
 }

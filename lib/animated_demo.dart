@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'animated_reorderable_stack.dart';
-import 'rabbit_ear_container.dart';
 
 class AnimatedReorderableStackDemo extends StatefulWidget {
   const AnimatedReorderableStackDemo({super.key});
@@ -13,6 +12,8 @@ class AnimatedReorderableStackDemo extends StatefulWidget {
 class _AnimatedReorderableStackDemoState
     extends State<AnimatedReorderableStackDemo> {
   late AnimatedReorderableController _controller;
+  Duration _animationDuration = const Duration(milliseconds: 300);
+  Curve _animationCurve = Curves.easeOutCubic;
 
   @override
   void initState() {
@@ -20,12 +21,30 @@ class _AnimatedReorderableStackDemoState
     _controller = AnimatedReorderableController(
       length: 3,
       topIndex: 0,
+      animationDuration: _animationDuration,
+      animationCurve: _animationCurve,
       onReorder: (index) {
         setState(() {
           // Update UI when controller changes
         });
       },
     );
+  }
+  
+  void _updateAnimationSettings() {
+    _controller.dispose();
+    _controller = AnimatedReorderableController(
+      length: 3,
+      topIndex: _controller.topIndex,
+      animationDuration: _animationDuration,
+      animationCurve: _animationCurve,
+      onReorder: (index) {
+        setState(() {
+          // Update UI when controller changes
+        });
+      },
+    );
+    setState(() {});
   }
 
   @override
@@ -57,7 +76,7 @@ class _AnimatedReorderableStackDemoState
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: List.generate(4, (index) {
+                      children: List.generate(3, (index) {
                         return ElevatedButton(
                           onPressed: () {
                             _controller.setTopIndex(index);
@@ -73,6 +92,94 @@ class _AnimatedReorderableStackDemoState
                           child: Text('Index $index'),
                         );
                       }),
+                    ),
+                    const SizedBox(height: 16),
+                    // Animation settings
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Animation Settings',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Text('Duration: '),
+                              Expanded(
+                                child: Slider(
+                                  value: _animationDuration.inMilliseconds.toDouble(),
+                                  min: 100,
+                                  max: 1000,
+                                  divisions: 18,
+                                  label: '${_animationDuration.inMilliseconds}ms',
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _animationDuration = Duration(milliseconds: value.round());
+                                    });
+                                    _updateAnimationSettings();
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              const Text('Curve: '),
+                              Expanded(
+                                child: DropdownButton<Curve>(
+                                  value: _animationCurve,
+                                  isExpanded: true,
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: Curves.linear,
+                                      child: Text('Linear'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: Curves.easeIn,
+                                      child: Text('Ease In'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: Curves.easeOut,
+                                      child: Text('Ease Out'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: Curves.easeInOut,
+                                      child: Text('Ease In Out'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: Curves.easeOutCubic,
+                                      child: Text('Ease Out Cubic'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: Curves.bounceOut,
+                                      child: Text('Bounce Out'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: Curves.elasticOut,
+                                      child: Text('Elastic Out'),
+                                    ),
+                                  ],
+                                  onChanged: (curve) {
+                                    if (curve != null) {
+                                      setState(() {
+                                        _animationCurve = curve;
+                                      });
+                                      _updateAnimationSettings();
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -120,7 +227,8 @@ class _AnimatedReorderableStackDemoState
               'Tap buttons to change current index or DRAG children to reorder!\n'
               '• Drag any child to make it the top child\n'
               '• Swipe the top child to cycle to the next one\n'
-              'Current child moves to (0,0), others to (20,20), (40,40), (60,60).',
+              '• Tab widths animate smoothly with configurable duration and curves\n'
+              '• Adjust animation settings above to see different effects',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
