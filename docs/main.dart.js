@@ -60844,7 +60844,7 @@ c=a2.a.r
 b=i/30
 a=A.ZD("Tab Tab "+(a4+1),a1,a1,a1,a1,B.bE,a1)
 a0=b
-return A.We(a1,A.alX(A.a84(B.b8,new A.DY(A.Ny(A.b([A.mC(B.eU,A.ug(new A.uU(A.Bp(a0,b,1),B.a4,!0,a1,a,a1),i,150),a1,a1,a1,a1,m),a2.a.e[a4]],t.E),B.b6,B.aI,B.b9),d,c,n,m,i,a1),B.aQ,!1,a1,a1,a1,a1,a1,a1,a1,e,g,f,a1,a1,a1,a1,h,a1,a1,a1),k),n,a1,l.a,a1,j,a3)},
+return A.We(a1,A.alX(A.a84(B.b8,new A.DY(A.Ny(A.b([A.mC(B.eU,A.ug(new A.uU(A.Bp(a0,b,1),B.a4,!0,a1,a,a1),i,150),a1,a1,a1,a1,m),a2.a.e[a4]],t.E),B.b6,B.aI,B.b9),d,c,n,Math.min(m,c-36),i,a1),B.aQ,!1,a1,a1,a1,a1,a1,a1,a1,e,g,f,a1,a1,a1,a1,h,a1,a1,a1),k),n,a1,l.a,a1,j,a3)},
 $S:388}
 A.a0b.prototype={
 $0(){var s=this.a,r=this.b,q=s.a.c

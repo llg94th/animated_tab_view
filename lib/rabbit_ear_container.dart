@@ -1,3 +1,4 @@
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -5,15 +6,15 @@ import 'package:flutter/rendering.dart';
 const kCardRadius = 12.0;
 
 class TabContainer extends StatelessWidget {
-  const TabContainer({
+  TabContainer({
     super.key,
     required this.child,
     this.gradient = const [Colors.white, Colors.red],
     this.width = 150,
     this.height = 120,
-    this.titleWidth = 80,
+    double titleWidth = 80,
     this.titleHeight = 30,
-  });
+  }) : titleWidth = min(titleWidth, width - kCardRadius * 3);
 
   final Widget child;
   final List<Color> gradient;
@@ -62,7 +63,8 @@ class _TabHitTestWidget extends SingleChildRenderObjectWidget {
   }
 
   @override
-  void updateRenderObject(BuildContext context, _RenderTabHitTest renderObject) {
+  void updateRenderObject(
+      BuildContext context, _RenderTabHitTest renderObject) {
     renderObject
       ..titleWidth = titleWidth
       ..titleHeight = titleHeight;
@@ -73,8 +75,8 @@ class _RenderTabHitTest extends RenderProxyBox {
   _RenderTabHitTest({
     required double titleWidth,
     required double titleHeight,
-  }) : _titleWidth = titleWidth,
-       _titleHeight = titleHeight;
+  })  : _titleWidth = titleWidth,
+        _titleHeight = titleHeight;
 
   double _titleWidth;
   double get titleWidth => _titleWidth;
@@ -153,7 +155,7 @@ class _RenderTabHitTest extends RenderProxyBox {
     if (finalPath.contains(position)) {
       return super.hitTest(result, position: position);
     }
-    
+
     return false;
   }
 }
