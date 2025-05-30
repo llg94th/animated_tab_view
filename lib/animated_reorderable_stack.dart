@@ -64,7 +64,7 @@ class AnimatedReorderableStack extends StatefulWidget {
     this.clipBehavior = Clip.hardEdge,
     this.children = const <Widget>[],
     this.childHeight = 300.0,
-    this.childWidth = 500.0,
+    this.childWidth = 600.0,
     this.minTabWidth = 150.0,
     this.tabOverlapWidth = 10.0,
     this.tabHeightSpacing = 4.0,
@@ -243,6 +243,8 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
             return Positioned(
               left: position.dx,
               top: reducedTitleHeight,
+              width: widget.childWidth,
+              height: widget.childHeight - reducedTitleHeight,
               child: Opacity(
                 opacity: opacity,
                 child: GestureDetector(
