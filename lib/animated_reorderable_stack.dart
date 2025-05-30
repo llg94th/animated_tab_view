@@ -82,6 +82,7 @@ class AnimatedReorderableStack extends StatefulWidget {
 class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
     with TickerProviderStateMixin {
   int? _draggingIndex;
+  bool _isJustSwiped = false;
   late ValueNotifier<Offset> _dragOffset;
   late AnimationController _animationController;
   late Animation<double> _animation;
@@ -130,8 +131,8 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
 
   void _onControllerChanged() {
     // Store previous values for animation
-    _previousTabWidths = Map.from(_currentTabWidths);
-
+    if(!_isJustSwiped) _previousTabWidths = Map.from(_currentTabWidths);
+    _isJustSwiped = false;
     // Calculate new values
     _updateAnimatedProperties();
 
@@ -186,7 +187,7 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
             final isDraggingLayer = _draggingIndex == index;
             final isDragging = _draggingIndex != null;
             final isTop = index == widget.controller.topIndex;
-            // final reducedTabWidth = max(min(dragOffset.dx, 0.0), -minTabWidth);
+            final reducedTabWidth = max(min(dragOffset.dx, 0.0), -minTabWidth);
 
             // Calculate animated tab width
             final previousWidth = _previousTabWidths[index] ?? minTabWidth;
@@ -201,12 +202,12 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
 
             // Apply drag reduction only when actually dragging
             final animatedTabWidth = isDragging
-                ? baseAnimatedWidth
+                ? max(baseAnimatedWidth + reducedTabWidth, minTabWidth)
                 : baseAnimatedWidth;
 
-            final position = isDraggingLayer ? dragOffset : Offset.zero;
+            final position = isDraggingLayer ? Offset(min(0.0, dragOffset.dx), 0.0) : Offset.zero;
             final opacity = isTop && isDraggingLayer
-                ? (max(minTabWidth - dragOffset.dx.abs(), 0.0) / minTabWidth)
+                ? (max(minTabWidth + dragOffset.dx, 0.0) / minTabWidth)
                     .clamp(0.1, 0.9)
                 : 1.0;
 
@@ -293,8 +294,13 @@ class _AnimatedReorderableStackState extends State<AnimatedReorderableStack>
       if (isSwipe) {
         if (_dragOffset.value.dx > 0) {
           // Swipe right - go to previous
-          widget.controller.previous();
+          // widget.controller.previous();
         } else {
+          _previousTabWidths = Map.from(_currentTabWidths);
+          for (int i = 0; i < widget.controller.length; i++) {
+            _previousTabWidths[i] = max(_previousTabWidths[i]! - minTabWidth, minTabWidth);
+          }
+          _isJustSwiped = true;
           // Swipe left - go to next
           widget.controller.next();
         }
